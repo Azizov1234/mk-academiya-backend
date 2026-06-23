@@ -1,0 +1,65 @@
+# ── Build artifacts ──────────────────────────
+node_modules
+dist
+build
+coverage
+generated
+
+# ── SQLite database fayllar ──────────────────
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+
+# ── Environment fayllar ──────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Log fayllar ─────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── OS va IDE ────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.sublime-workspace
+*.launch
+
+# ── Test fayllar ─────────────────────────────
+test/
+*.spec.ts
+*.e2e-spec.ts
+
+# ── Docker o'zi ──────────────────────────────
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# ── Git ──────────────────────────────────────
+.git/
+.gitignore
+.github/
+
+# ── Ishchi vaqtinchalik fayllar ──────────────
+.temp/
+.tmp/
+*.pid
+*.seed
+*.pid.lock
+
+# ── Hujjatlar ────────────────────────────────
+README.md
+*.md
+
+# ── tsconfig paths (faqat build uchun kerak) ─
+tsconfig.build.json
+
+# ── Eslint/Prettier ──────────────────────────
+eslint.config.mjs
+.prettierrc

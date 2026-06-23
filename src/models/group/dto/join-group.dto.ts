@@ -1,0 +1,1 @@
+// JoinGroupDto - Fields: inviteCode

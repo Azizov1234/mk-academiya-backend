@@ -1,0 +1,1 @@
+// BookEntity - Response serialization

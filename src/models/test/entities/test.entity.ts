@@ -1,0 +1,1 @@
+// Test entities for serialization

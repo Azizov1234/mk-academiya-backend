@@ -1,0 +1,570 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  phone               String?              @unique
+  passwordHash        String               @map("password_hash")
+  role                String               @default("STUDENT")
+  fullName            String               @map("full_name")
+  avatarUrl           String?              @map("avatar_url")
+  cefrLevel           String?              @map("cefr_level")
+  isActive            Boolean              @default(true) @map("is_active")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  groupMemberships    GroupMember[]
+  targetedAssignments GroupAssignment[]    @relation("StudentTargetedAssignments")
+  groupsCreated       Group[]              @relation("TeacherGroups")
+  leaderboards        Leaderboard[]
+  notifications       Notification[]
+  ratings             Rating[]
+  refreshTokens       RefreshToken[]
+  achievements        StudentAchievement[]
+  gradedTasks         StudentTask[]        @relation("GradedTasks")
+  tasks               StudentTask[]
+  createdTasks        Task[]               @relation("CreatedTasks")
+  testAttempts        TestAttempt[]
+  createdTests        Test[]               @relation("CreatedTests")
+  profile             UserProfile?
+  vocabularyProgress  VocabularyProgress[]
+  wordLists           WordList[]
+  xpTransactions      XpTransaction[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  tokenHash  String   @unique @map("token_hash")
+  expiresAt  DateTime @map("expires_at")
+  deviceInfo String?  @map("device_info")
+  isActive   Boolean  @default(true) @map("is_active")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model UserProfile {
+  id                   Int       @id @default(autoincrement())
+  userId               Int       @unique @map("user_id")
+  email                String?
+  dateOfBirth          DateTime? @map("date_of_birth")
+  language             String    @default("UZ")
+  timezone             String    @default("Asia/Tashkent")
+  notificationSettings String?   @map("notification_settings")
+  isActive             Boolean   @default(true) @map("is_active")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Group {
+  id           Int               @id @default(autoincrement())
+  name         String
+  description  String?
+  teacherId    Int               @map("teacher_id")
+  inviteCode   String            @unique @map("invite_code")
+  isActive     Boolean           @default(true) @map("is_active")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  assignments  GroupAssignment[]
+  courses      GroupCourse[]
+  members      GroupMember[]
+  teacher      User              @relation("TeacherGroups", fields: [teacherId], references: [id], onDelete: Cascade)
+  leaderboards Leaderboard[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id        Int      @id @default(autoincrement())
+  groupId   Int      @map("group_id")
+  studentId Int      @map("student_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+  status    String   @default("ACTIVE")
+  isActive  Boolean  @default(true) @map("is_active")
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+  @@map("group_members")
+}
+
+model GroupAssignment {
+  id         Int       @id @default(autoincrement())
+  groupId    Int       @map("group_id")
+  studentId  Int?      @map("student_id")
+  testId     Int?      @map("test_id")
+  taskId     Int?      @map("task_id")
+  dueDate    DateTime? @map("due_date")
+  isRequired Boolean   @default(true) @map("is_required")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  task       Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  test       Test?     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  group      Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student    User?     @relation("StudentTargetedAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("group_assignments")
+}
+
+model Course {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  level       String   @default("A1") // CEFR level
+  imageUrl    String?  @map("image_url")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tests  Test[]
+  tasks  Task[]
+  groups GroupCourse[]
+
+  @@map("courses")
+}
+
+model GroupCourse {
+  id         Int      @id @default(autoincrement())
+  groupId    Int      @map("group_id")
+  courseId   Int      @map("course_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  isActive   Boolean  @default(true) @map("is_active")
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, courseId])
+  @@map("group_courses")
+}
+
+model Book {
+  id            Int      @id @default(autoincrement())
+  title         String
+  author        String?
+  description   String?
+  coverImageUrl String?  @map("cover_image_url")
+  fileUrl       String   @unique @map("file_url")
+  cefrLevel     String?  @map("cefr_level")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([title, author])
+  @@map("books")
+}
+
+model Rating {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  score      Int
+  reviewText String?  @map("review_text")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetType, targetId])
+  @@map("ratings")
+}
+
+model Vocabulary {
+  id                 Int                  @id @default(autoincrement())
+  word               String               @unique
+  translation        String
+  pronunciation      String?
+  partOfSpeech       String?              @map("part_of_speech")
+  exampleSentence    String?              @map("example_sentence")
+  exampleTranslation String?              @map("example_translation")
+  imageUrl           String?              @map("image_url")
+  audioUrl           String?              @map("audio_url")
+  difficulty         Int                  @default(1)
+  cefrLevel          String?              @map("cefr_level")
+  isActive           Boolean              @default(true) @map("is_active")
+  progress           VocabularyProgress[]
+  wordListItems      WordListItem[]
+
+  @@map("vocabularies")
+}
+
+model VocabularyProgress {
+  id             Int        @id @default(autoincrement())
+  studentId      Int        @map("student_id")
+  vocabularyId   Int        @map("vocabulary_id")
+  status         String     @default("NEW")
+  easeFactor     Float      @default(2.5) @map("ease_factor")
+  intervalDays   Int        @default(0) @map("interval_days")
+  nextReviewAt   DateTime?  @map("next_review_at")
+  correctCount   Int        @default(0) @map("correct_count")
+  wrongCount     Int        @default(0) @map("wrong_count")
+  lastReviewedAt DateTime?  @map("last_reviewed_at")
+  isActive       Boolean    @default(true) @map("is_active")
+  vocabulary     Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, vocabularyId])
+  @@map("vocabulary_progress")
+}
+
+model WordList {
+  id        Int            @id @default(autoincrement())
+  studentId Int            @map("student_id")
+  name      String
+  isPublic  Boolean        @default(false) @map("is_public")
+  isActive  Boolean        @default(true) @map("is_active")
+  items     WordListItem[]
+  student   User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("word_lists")
+}
+
+model WordListItem {
+  id           Int        @id @default(autoincrement())
+  wordListId   Int        @map("word_list_id")
+  vocabularyId Int        @map("vocabulary_id")
+  addedAt      DateTime   @default(now()) @map("added_at")
+  isActive     Boolean    @default(true) @map("is_active")
+  vocabulary   Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  wordList     WordList   @relation(fields: [wordListId], references: [id], onDelete: Cascade)
+
+  @@unique([wordListId, vocabularyId])
+  @@map("word_list_items")
+}
+
+model Task {
+  id           Int               @id @default(autoincrement())
+  title        String
+  description  String?
+  type         String            @default("READING")
+  instructions String?
+  maxScore     Int               @default(100) @map("max_score")
+  createdById  Int?              @map("created_by")
+  isActive     Boolean           @default(true) @map("is_active")
+  courseId     Int?              @map("course_id")
+  assignments  GroupAssignment[]
+  studentTasks StudentTask[]
+  attachments  TaskAttachment[]
+  course       Course?           @relation(fields: [courseId], references: [id])
+  createdBy    User?             @relation("CreatedTasks", fields: [createdById], references: [id])
+
+  @@map("tasks")
+}
+
+model StudentTask {
+  id                Int       @id @default(autoincrement())
+  studentId         Int       @map("student_id")
+  taskId            Int       @map("task_id")
+  status            String    @default("PENDING")
+  submittedAt       DateTime? @map("submitted_at")
+  submissionContent String?   @map("submission_content")
+  score             Int?
+  teacherFeedback   String?   @map("teacher_feedback")
+  gradedAt          DateTime? @map("graded_at")
+  gradedById        Int?      @map("graded_by")
+  isActive          Boolean   @default(true) @map("is_active")
+  gradedBy          User?     @relation("GradedTasks", fields: [gradedById], references: [id])
+  task              Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  student           User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, taskId])
+  @@map("student_tasks")
+}
+
+model TaskAttachment {
+  id         Int     @id @default(autoincrement())
+  taskId     Int     @map("task_id")
+  fileUrl    String  @map("file_url")
+  fileType   String  @map("file_type")
+  uploadedBy String  @map("uploaded_by")
+  isActive   Boolean @default(true) @map("is_active")
+  task       Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_attachments")
+}
+
+model Test {
+  id               Int               @id @default(autoincrement())
+  title            String
+  description      String?
+  type             String            @default("PRACTICE")
+  cefrLevel        String?           @map("cefr_level")
+  isPublicExam     Boolean           @default(false) @map("is_public_exam")
+  publicExamType   String?           @map("public_exam_type")
+  publicExamDirection String?        @map("public_exam_direction")
+  timeLimitMinutes Int?              @map("time_limit_minutes")
+  passingScore     Int               @default(0) @map("passing_score")
+  shuffleQuestions Boolean           @default(false) @map("shuffle_questions")
+  maxAttempts      Int?              @map("max_attempts")
+  isAdaptive       Boolean           @default(false) @map("is_adaptive")
+  isPublished      Boolean           @default(false) @map("is_published")
+  timeLimit        Int?              @map("time_limit")
+  createdById      Int?              @map("created_by")
+  isActive         Boolean           @default(true) @map("is_active")
+  courseId         Int?              @map("course_id")
+  assignments      GroupAssignment[]
+  questions        Question[]
+  attempts         TestAttempt[]
+  publicAttempts   PublicExamAttempt[]
+  course           Course?           @relation(fields: [courseId], references: [id])
+  createdBy        User?             @relation("CreatedTests", fields: [createdById], references: [id])
+
+  @@map("tests")
+}
+
+model Question {
+  id            Int                @id @default(autoincrement())
+  testId        Int                @map("test_id")
+  type          String             @default("MCQ")
+  inputType     String             @default("OPTIONS") @map("input_type")
+  questionText  String             @map("question_text")
+  options       String?
+  correctAnswer String?            @map("correct_answer")
+  explanation   String?
+  points        Int                @default(1)
+  difficulty    Int                @default(1)
+  skill         String?
+  isActive      Boolean            @default(true) @map("is_active")
+  analytics     QuestionAnalytics?
+  test          Test               @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@map("questions")
+}
+
+model TestAttempt {
+  id               Int       @id @default(autoincrement())
+  studentId        Int       @map("student_id")
+  testId           Int       @map("test_id")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  submittedAt      DateTime? @map("submitted_at")
+  score            Int?
+  percentage       Float?
+  passed           Boolean?
+  timeSpentSeconds Int?      @map("time_spent_seconds")
+  answers          String?
+  feedback         String?
+  isActive         Boolean   @default(true) @map("is_active")
+  test             Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  student          User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("test_attempts")
+}
+
+model PublicExamAttempt {
+  id                Int       @id @default(autoincrement())
+  testId            Int       @map("test_id")
+  participantName   String    @map("participant_name")
+  selectedMode      String    @map("selected_mode")
+  selectedLevel     String?   @map("selected_level")
+  selectedDirection String?   @map("selected_direction")
+  estimatedLevel    String?   @map("estimated_level")
+  score             Int       @default(0)
+  maxScore          Int       @default(0) @map("max_score")
+  percentage        Float     @default(0)
+  passed            Boolean   @default(false)
+  timeSpentSeconds  Int?      @map("time_spent_seconds")
+  answers           String?
+  startedAt         DateTime  @default(now()) @map("started_at")
+  submittedAt       DateTime  @default(now()) @map("submitted_at")
+  isActive          Boolean   @default(true) @map("is_active")
+  test              Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@map("public_exam_attempts")
+}
+
+model QuestionAnalytics {
+  id             Int      @id @default(autoincrement())
+  questionId     Int      @unique @map("question_id")
+  totalAttempts  Int      @default(0) @map("total_attempts")
+  correctCount   Int      @default(0) @map("correct_count")
+  avgTimeSeconds Float    @default(0) @map("avg_time_seconds")
+  isActive       Boolean  @default(true) @map("is_active")
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("question_analytics")
+}
+
+model Achievement {
+  id                  Int                  @id @default(autoincrement())
+  title               String
+  description         String?
+  iconUrl             String?              @map("icon_url")
+  conditionType       String               @map("condition_type")
+  conditionValue      Int                  @map("condition_value")
+  xpReward            Int                  @default(0) @map("xp_reward")
+  badgeColor          String?              @map("badge_color")
+  isActive            Boolean              @default(true) @map("is_active")
+  studentAchievements StudentAchievement[]
+
+  @@map("achievements")
+}
+
+model StudentAchievement {
+  id            Int         @id @default(autoincrement())
+  studentId     Int         @map("student_id")
+  achievementId Int         @map("achievement_id")
+  earnedAt      DateTime    @default(now()) @map("earned_at")
+  isActive      Boolean     @default(true) @map("is_active")
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  student       User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, achievementId])
+  @@map("student_achievements")
+}
+
+model XpTransaction {
+  id          Int      @id @default(autoincrement())
+  studentId   Int      @map("student_id")
+  amount      Int
+  reason      String
+  referenceId String?  @map("reference_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  isActive    Boolean  @default(true) @map("is_active")
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("xp_transactions")
+}
+
+model Leaderboard {
+  id        Int     @id @default(autoincrement())
+  scope     String  @default("GLOBAL")
+  groupId   Int?    @map("group_id")
+  studentId Int     @map("student_id")
+  score     Int     @default(0)
+  rank      Int?
+  period    String?
+  isActive  Boolean @default(true) @map("is_active")
+  student   User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group     Group?  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("leaderboards")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  type      String
+  title     String
+  body      String
+  data      String?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model SystemStats {
+  id         Int      @id @default(autoincrement())
+  cpuUsage   Float    @map("cpu_usage")
+  ramFree    Float    @map("ram_free")
+  diskSpace  Float    @map("disk_space")
+  network    Int      @map("network_ms")
+  uptimePerc Float    @map("uptime_perc")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("system_stats")
+}
+
+model Lead {
+  id          Int       @id @default(autoincrement())
+  fullName    String    @map("full_name")
+  phone       String
+  message     String?
+  answer      String?
+  isPublished Boolean   @default(false) @map("is_published")
+  answeredAt  DateTime? @map("answered_at")
+  status      String    @default("NEW")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
+
+model CenterSettings {
+  id           Int      @id @default(autoincrement())
+  name         String   @default("MK Academy")
+  shortName    String   @default("MK") @map("short_name")
+  logoUrl      String?  @map("logo_url")
+  description  String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Landing page content (stored as JSON strings for SQLite compatibility)
+  aboutText    String?  @map("about_text")
+  aboutPoints  String?  @map("about_points")   // JSON: string[]
+  teamMembers  String?  @map("team_members")   // JSON: [{name,role,image,focus}]
+  courseTracks String?  @map("course_tracks")  // JSON: [{title,level,desc}]
+  address      String?
+  phoneNumber  String?  @map("phone_number")
+  workingHours String?  @map("working_hours")
+  socialLinks  String?  @map("social_links")   // JSON: {telegram?,instagram?,youtube?}
+  mapEmbedUrl  String?  @map("map_embed_url")
+
+  @@map("center_settings")
+}
+
+model BotAdmin {
+  id               Int      @id @default(autoincrement())
+  telegramUserId   String?  @unique
+  telegramUsername String?  @unique
+  fullName         String
+  createdAt        DateTime @default(now())
+
+  @@map("bot_admins")
+}
+
+model BotStudentResult {
+  id               Int      @id @default(autoincrement())
+  studentFullName  String
+  examType         String
+  scoreOrLevel     String
+  certificateImage String
+  examDate         DateTime
+  channelPostLink  String
+  note             String?
+  createdAt        DateTime @default(now())
+
+  @@map("bot_student_results")
+}
+
+model BotLeadRequest {
+  id         Int      @id @default(autoincrement())
+  fullName   String
+  phone      String
+  courseType String?
+  createdAt  DateTime @default(now())
+
+  @@map("bot_lead_requests")
+}
+
+model BotCenterInfo {
+  id               Int      @id @default(autoincrement())
+  aboutText        String
+  address          String
+  phone1           String
+  phone2           String?
+  telegramUsername String?
+  updatedAt        DateTime @updatedAt
+
+  @@map("bot_center_info")
+}
+
+model BotCourse {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("bot_courses")
+}

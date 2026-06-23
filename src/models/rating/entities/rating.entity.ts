@@ -1,0 +1,1 @@
+// RatingEntity - Response serialization

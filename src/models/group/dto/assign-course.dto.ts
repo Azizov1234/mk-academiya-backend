@@ -1,0 +1,1 @@
+// AssignCourseDto - Fields: courseId
