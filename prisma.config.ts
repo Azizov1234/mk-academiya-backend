@@ -20,9 +20,7 @@ function normalizeDatabaseUrl(url: string): string {
 }
 
 const isRenderRuntime = Boolean(process.env["RENDER"]) || process.env["NODE_ENV"] === "production";
-const fallbackUrl = isRenderRuntime
-  ? "file:/tmp/mk-academy.db"
-  : toSqliteFileUrl(resolve(process.cwd(), "prisma", "dev.db"));
+const fallbackUrl = "postgresql://postgres:postgres@localhost:5432/mk_academy?schema=public";
 const databaseUrl = process.env["DATABASE_URL"]
   ? normalizeDatabaseUrl(process.env["DATABASE_URL"])
   : fallbackUrl;

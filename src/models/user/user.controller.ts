@@ -198,6 +198,18 @@ export class UserController {
   @UseGuards(AuthGuard, RolesGuard)
   @ApiOperation({ summary: `${UserRole.SUPERADMIN}, ${UserRole.ADMIN}` })
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: UpdateUserDto,
+    @Req() req: Request,
+  ) {
+    return this.userService.update(id, payload, req['user']);
+  }
+
+  @UseGuards(AuthGuard, RolesGuard)
+  @ApiOperation({ summary: `${UserRole.SUPERADMIN}, ${UserRole.ADMIN}` })
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     return this.userService.remove(id, req['user']);

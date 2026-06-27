@@ -13,6 +13,7 @@ import {
   questionsA as preIntermediateQuestionsA,
   questionsB as preIntermediateQuestionsB,
 } from './questions.pre-intermediate.seed';
+import { demoQuestions } from './questions.demo.seed';
 import { PrismaService } from 'src/core/config/prisma.service';
 
 type RawSeedQuestion = {
@@ -229,11 +230,14 @@ export class SeedService {
         continue;
       }
 
+      const title = testId === 9 ? "Demo Test (10 savollik)" : `Seed Test Variant ${testId}`;
+      const description = testId === 9 ? "Platformani tekshirib ko'rish uchun qisqa demo test." : `Auto-created for question seed (testId=${testId})`;
+
       await (this.prisma.test as any).create({
         data: {
           id: testId,
-          title: `Seed Test Variant ${testId}`,
-          description: `Auto-created for question seed (testId=${testId})`,
+          title,
+          description,
           type: 'PRACTICE',
           passingScore: 0,
           isPublished: true,
@@ -302,6 +306,7 @@ export class SeedService {
       ...elementaryQuestionsB,
       ...preIntermediateQuestionsA,
       ...preIntermediateQuestionsB,
+      ...demoQuestions,
     ];
 
     return combined

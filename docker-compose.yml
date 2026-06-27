@@ -1,4 +1,24 @@
 services:
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: mk_academy_postgres
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${DB_PORT:-5432}:5432"
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+  #     POSTGRES_DB: ${DB_NAME:-mk_academy}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-mk_academy} || exit 1"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - mk_academy_network
+
   backend:
     container_name: mk_academy_backend
     image: ghcr.io/moxirbek236/mk-academy-backend:latest
@@ -13,7 +33,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3232}
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-file:/app/data/mk-academy.db}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:1234@postgres:5432/mk_academy?schema=public}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       CORS_ALLOW_LOCALHOST: ${CORS_ALLOW_LOCALHOST:-false}
       THROTTLE_TTL: ${THROTTLE_TTL:-60000}
@@ -32,8 +52,9 @@ services:
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-}
       SUPERADMIN_FULL_NAME: ${SUPERADMIN_FULL_NAME:-}
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-}
-    volumes:
-      - ${SQLITE_DATA_DIR:-/var/lib/mk-academy}:/app/data:Z
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:${PORT:-3232}/api/system/health || exit 1"]
       interval: 30s
@@ -47,3 +68,7 @@ networks:
   mk_academy_network:
     name: mk_academy_network
     driver: bridge
+
+# volumes:
+#   postgres_data:
+#     driver: local

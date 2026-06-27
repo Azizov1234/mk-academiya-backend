@@ -7,7 +7,7 @@ import {
   UpdateUserDto,
   QueryUserSuperAdminDto,
 } from './dto';
-import { User } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { UserRole } from 'src/core/enums';
 import { join } from 'path';
 import * as fs from 'fs';
@@ -15,6 +15,88 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { QueryUserTeacherDto } from './dto/query.teacher.dto';
 import { QueryUserAdminDto } from './dto/query.admin.dto';
+
+const USER_LIST_SELECT = {
+  id: true,
+  fullName: true,
+  phone: true,
+  avatarUrl: true,
+  cefrLevel: true,
+  role: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+function getPagination(page?: number, limit?: number) {
+  const safePage = Math.max(Number(page) || 1, 1);
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 200);
+
+  return {
+    skip: (safePage - 1) * safeLimit,
+    take: safeLimit,
+  };
+}
+
+function applyDirectoryFilters(
+  where: Prisma.UserWhereInput,
+  query: {
+    fullName?: string;
+    GroupName?: string;
+    isActive?: boolean;
+  },
+) {
+  const fullName = query.fullName?.trim();
+  const groupName = query.GroupName?.trim();
+
+  if (fullName) {
+    where.fullName = {
+      contains: fullName,
+      mode: 'insensitive',
+    };
+  }
+
+  if (typeof query.isActive === 'boolean') {
+    where.isActive = query.isActive;
+  }
+
+  if (groupName) {
+    const groupFilter: Prisma.UserWhereInput = {
+      OR: [
+        {
+          groupsCreated: {
+            some: {
+              name: {
+                contains: groupName,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+        {
+          groupMemberships: {
+            some: {
+              group: {
+                name: {
+                  contains: groupName,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    where.AND = Array.isArray(where.AND)
+      ? [...where.AND, groupFilter]
+      : where.AND
+        ? [where.AND, groupFilter]
+        : [groupFilter];
+  }
+
+  return where;
+}
 
 @Injectable()
 export class UserService {
@@ -106,15 +188,21 @@ export class UserService {
           fullName: query.fullName,
           GroupName: query.GroupName,
           isActive: query.isActive,
+          page: query.page,
+          limit: query.limit,
           user:
             query.user === UserRole.STUDENT ||
-            query.user === UserRole.TEACHER ||
-            query.user === UserRole.GLOBAL_USER
+              query.user === UserRole.TEACHER ||
+              query.user === UserRole.GLOBAL_USER
               ? query.user
               : undefined,
         });
       case UserRole.TEACHER:
-        return this.findAllTeacher(currentUser, { fullName: query.fullName });
+        return this.findAllTeacher(currentUser, {
+          fullName: query.fullName,
+          page: query.page,
+          limit: query.limit,
+        });
       default:
         throw new ForbiddenException('Sizda foydalanuvchilar ro‘yxatini ko‘rish huquqi yo‘q');
     }
@@ -241,76 +329,22 @@ export class UserService {
     }
   }
 
-  async findAllSuperAdmin(query: QueryUserSuperAdminDto): Promise<User[]> {
-    const page = query.page || 1;
-    const limit = query.limit;
+  async findAllSuperAdmin(query: QueryUserSuperAdminDto) {
     try {
-      let users = await this.prisma.user.findMany({
-        include: {
-          groupsCreated: true,
-          groupMemberships: {
-            include: {
-              group: true,
-            },
-          },
-        },
-      });
-
-
-      if (query.fullName) {
-        const search = query.fullName.toLowerCase();
-        users = users.filter(user =>
-          user.fullName.toLowerCase().includes(search),
-        );
-      }
-
-
-      if (query.GroupName) {
-        const groupSearch = query.GroupName.toLowerCase();
-        users = users.filter(user => {
-          // Teacher bo'lsa
-          const teacherMatch = user.groupsCreated?.some(group =>
-            group.name.toLowerCase().includes(groupSearch),
-          );
-
-
-          const studentMatch = user.groupMemberships?.some(m =>
-            m.group.name.toLowerCase().includes(groupSearch),
-          );
-
-          return teacherMatch || studentMatch;
-        });
-      }
-
+      const where = applyDirectoryFilters({}, query);
 
       if (query.user) {
-        users = users.filter(user => user.role === query.user);
+        where.role = query.user;
       }
 
-
-      if (query.isActive !== undefined) {
-        users = users.filter(user => user.isActive === query.isActive);
-      }
-
-      if (limit) {
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        users = users.slice(start, end);
-      }
-
-
-      users = users.map(user => {
-        if (['STUDENT', 'TEACHER', 'ADMIN', 'GLOBAL_USER'].includes(user.role)) {
-          return {
-            ...user,
-            groupsCreated: [],
-            groupMemberships: [],
-          };
-        }
-        return user;
+      return await this.prisma.user.findMany({
+        where,
+        ...getPagination(query.page, query.limit),
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: USER_LIST_SELECT,
       });
-
-      return users;
     } catch (err) {
       console.error('findAllSuperAdmin error:', err);
       throw new BadRequestException(
@@ -319,84 +353,33 @@ export class UserService {
     }
   }
   async findAllAdmin(query: QueryUserAdminDto) {
-    const page = query.page || 1;
-    const limit = query.limit;
     try {
-      const page = query.page || 1;
-      const limit = query.limit || 10;
-      const skip = (page - 1) * limit;
-
-      let users = await this.prisma.user.findMany({
-        skip,
-        take: limit,
-        where: {
-          role: {
-            notIn: [UserRole.ADMIN, UserRole.SUPERADMIN],
-          },
-        },
-        include: {
-          groupsCreated: true,
-          groupMemberships: {
-            include: {
-              group: true,
+      const where = applyDirectoryFilters(
+        {
+          role: query.user
+            ? query.user
+            : {
+              notIn: [UserRole.ADMIN, UserRole.SUPERADMIN],
             },
-          },
         },
+        query,
+      );
+
+      return await this.prisma.user.findMany({
+        where: {
+          ...where,
+          role: query.user
+            ? query.user
+            : {
+              notIn: [UserRole.ADMIN, UserRole.SUPERADMIN],
+            },
+        },
+        ...getPagination(query.page, query.limit),
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: USER_LIST_SELECT,
       });
-
-      if (query.fullName) {
-        const search = query.fullName.toLowerCase();
-        users = users.filter(user =>
-          user.fullName.toLowerCase().includes(search),
-        );
-      }
-
-      if (query.GroupName) {
-        const groupSearch = query.GroupName.toLowerCase();
-
-        users = users.filter(user => {
-          const teacherMatch = user.groupsCreated?.some(group =>
-            group.name.toLowerCase().includes(groupSearch),
-          );
-
-          const studentMatch = user.groupMemberships?.some(m =>
-            m.group.name.toLowerCase().includes(groupSearch),
-          );
-
-          return teacherMatch || studentMatch;
-        });
-      }
-
-      if (query.user) {
-        users = users.filter(user => user.role === query.user);
-      }
-
-      if (query.isActive !== undefined) {
-        users = users.filter(user => user.isActive === query.isActive);
-      }
-
-      if (limit) {
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        users = users.slice(start, end);
-      }
-
-      users = users.map(user => {
-        if (
-          user.role === UserRole.STUDENT ||
-          user.role === UserRole.TEACHER ||
-          user.role === UserRole.GLOBAL_USER
-        ) {
-          return {
-            ...user,
-            groupsCreated: [],
-            groupMemberships: [],
-          };
-        }
-        return user;
-      });
-
-      return users;
     } catch (err) {
       console.error('findAllAdmin error:', err);
       throw new BadRequestException(
@@ -406,38 +389,31 @@ export class UserService {
   }
 
   async findAllTeacher(currentUser: { id: number }, query: QueryUserTeacherDto) {
-    const page = query.page || 1;
-    const limit = query.limit;
     try {
-      let users = await this.prisma.user.findMany({
-        where: {
+      const where = applyDirectoryFilters(
+        {
           isActive: true,
           role: UserRole.STUDENT,
           groupMemberships: {
             some: {
               isActive: true,
               group: {
-                teacherId: currentUser.id
-              }
+                teacherId: currentUser.id,
+              },
             }
-          }
-        }
+          },
+        },
+        query,
+      );
+
+      return await this.prisma.user.findMany({
+        where,
+        ...getPagination(query.page, query.limit),
+        orderBy: {
+          fullName: 'asc',
+        },
+        select: USER_LIST_SELECT,
       });
-
-      if (query.fullName) {
-        const search = query.fullName.toLowerCase();
-        users = users.filter(user =>
-          user.fullName.toLowerCase().includes(search),
-        );
-      }
-
-      if (limit) {
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        users = users.slice(start, end);
-      }
-
-      return users;
     } catch (err) {
       throw new BadRequestException(
         'Invalid query parameters or database error',
@@ -463,6 +439,105 @@ export class UserService {
     }
 
     return await this.prisma.user.findUnique({ where: { id: id, groupsCreated: { some: { teacherId: currentUser.id } } } });
+  }
+
+  async update(
+    id: number,
+    payload: UpdateUserDto,
+    currentUser: { id: number; role: UserRole },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (currentUser.role !== UserRole.SUPERADMIN && currentUser.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    if (
+      currentUser.role === UserRole.ADMIN &&
+      (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN)
+    ) {
+      throw new ForbiddenException('Admin cannot update admin or super admin');
+    }
+
+    if (typeof payload.isActive === 'boolean' && currentUser.id === id) {
+      throw new ForbiddenException('You cannot change your own status');
+    }
+
+    const data: any = {};
+    const phone = payload.phone?.trim();
+    const fullName = payload.fullName?.trim();
+    const password = payload.passwordHash?.trim();
+
+    if (phone && phone !== user.phone) {
+      const existingPhone = await this.prisma.user.findUnique({
+        where: { phone },
+      });
+
+      if (existingPhone && existingPhone.id !== id) {
+        throw new BadRequestException('User already exists');
+      }
+
+      data.phone = phone;
+    }
+
+    if (fullName) {
+      data.fullName = fullName;
+    }
+
+    if (password) {
+      data.passwordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (payload.avatarUrl !== undefined) {
+      data.avatarUrl = payload.avatarUrl?.trim() || null;
+    }
+
+    if (payload.cefrLevel !== undefined) {
+      data.cefrLevel = payload.cefrLevel || null;
+    }
+
+    if (typeof payload.isActive === 'boolean') {
+      data.isActive = payload.isActive;
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('No valid fields provided for update');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        avatarUrl: true,
+        cefrLevel: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (typeof payload.isActive === 'boolean') {
+      await this.prisma.userProfile.updateMany({
+        where: { userId: id },
+        data: { isActive: payload.isActive },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'User updated successfully',
+      data: updatedUser,
+    };
   }
 
   async remove(id: number, currentUser: { id: number; role: UserRole }) {

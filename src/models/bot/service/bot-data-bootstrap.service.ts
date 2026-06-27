@@ -24,6 +24,13 @@ export class BotDataBootstrapService implements OnModuleInit {
   }
 
   private async ensureBotTables(): Promise<void> {
+    const databaseUrl = process.env.DATABASE_URL || '';
+    const isSqlite = databaseUrl.startsWith('file:') || !databaseUrl;
+    if (!isSqlite) {
+      this.logger.log('Skipping raw bot table creation (PostgreSQL detected, tables are managed by Prisma migrations)');
+      return;
+    }
+
     await this.prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "bot_admins" (
         "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,

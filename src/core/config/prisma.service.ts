@@ -27,7 +27,7 @@ function resolveDatabaseUrl(): string {
     throw new Error('DATABASE_URL is required in production/runtime environment');
   }
 
-  return 'file:./prisma/dev.db';
+  return 'postgresql://postgres:postgres@localhost:5432/mk_academy?schema=public';
 }
 
 @Injectable()

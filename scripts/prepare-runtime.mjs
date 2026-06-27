@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 function toSqliteFileUrl(filePath) {
@@ -31,7 +31,7 @@ function resolveDatabaseUrl() {
     throw new Error('DATABASE_URL is required in production/runtime environment');
   }
 
-  return 'file:./prisma/dev.db';
+  return 'postgresql://postgres:postgres@localhost:5432/mk_academy?schema=public';
 }
 
 function runCommand(command, args) {
@@ -67,6 +67,29 @@ function quoteForCmd(value) {
   }
 
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+// Load environment variables from .env if present
+if (existsSync('.env')) {
+  try {
+    const envContent = readFileSync('.env', 'utf-8');
+    for (const line of envContent.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const firstEquals = trimmed.indexOf('=');
+      if (firstEquals === -1) continue;
+      const key = trimmed.slice(0, firstEquals).trim();
+      let val = trimmed.slice(firstEquals + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load .env file in prepare-runtime:', err);
+  }
 }
 
 const databaseUrl = resolveDatabaseUrl();
