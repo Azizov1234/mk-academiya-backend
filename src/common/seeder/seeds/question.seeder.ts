@@ -69,6 +69,21 @@ export class SeedService {
     const superAdminStatus = await this.ensureSuperAdmin();
 
     const allSeedQuestions = this.getAllSeedQuestions();
+    const existingQuestionsCount = await this.prisma.question.count({
+      where: { isActive: true },
+    });
+
+    if (existingQuestionsCount >= allSeedQuestions.length && process.env.FORCE_SEED !== '1') {
+      this.logger.log(`🌱 Questions are already seeded (${existingQuestionsCount}/${allSeedQuestions.length}). Skipping question seeder...`);
+      return {
+        superAdminStatus,
+        testsCreated: 0,
+        questionsCreated: 0,
+        questionsReactivated: 0,
+        totalSeedQuestions: allSeedQuestions.length,
+      };
+    }
+
     const uniqueTestIds = [
       ...new Set(allSeedQuestions.map((question) => question.testId)),
     ];

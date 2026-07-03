@@ -10,24 +10,38 @@ export class UserSeeder {
   constructor(private readonly prisma: PrismaService) {}
 
   async seedUsers(): Promise<void> {
-    this.logger.log('Starting comprehensive seeder (Teachers, Admins, 100 Students, Groups, Attempts)...');
+    const assignmentCount = await this.prisma.groupAssignment.count();
+    const studentCount = await this.prisma.user.count({
+      where: { role: UserRole.STUDENT },
+    });
+    const vocabCount = await this.prisma.vocabulary.count();
+
+    if (studentCount >= 500 && vocabCount >= 15 && process.env.FORCE_SEED !== '1') {
+      this.logger.log('🌱 Database is already seeded (students >= 500, vocabularies >= 15). Skipping user seeder...');
+      if (assignmentCount < 10) {
+        await this.seedGroupAssignments();
+      }
+      return;
+    }
+
+    this.logger.log('🌱 Seeder ishga tushdi: SuperAdmin, Admin, Teacher, 500 Student, Groups, Attempts...');
 
     // 1. Pre-calculate password hash for "123456" to ensure speed
     const defaultPassword = '123456';
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // 2. Ensure Superadmin
+    // 2. Ensure Superadmin (Asosiy Superadmin)
     const superAdminPhone = '998999992000';
     const superAdmin = await this.prisma.user.upsert({
       where: { phone: superAdminPhone },
       update: {
-        fullName: 'SUPERADMIN',
+        fullName: 'Muhammadkarim To\'xtayev',
         passwordHash,
         role: UserRole.SUPERADMIN,
         isActive: true,
       },
       create: {
-        fullName: 'SUPERADMIN',
+        fullName: 'Muhammadkarim To\'xtayev',
         phone: superAdminPhone,
         passwordHash,
         role: UserRole.SUPERADMIN,
@@ -169,14 +183,43 @@ export class UserSeeder {
       groups.push(group);
     }
 
-    // 6. Seed 500 Students & Add to Groups
+    // 6. Seed 500 Students (chiroyli o'zbek ismlari bilan) & Add to Groups
     const students: any[] = [];
     const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1'];
-    
+
+    // Chiroyli o'zbek ismlari 🎯
+    const uzbekFirstNames = [
+      "Abdulla", "Azizbek", "Bekzod", "Davron", "Eldor",
+      "Farrux", "G'ani", "Husan", "Islom", "Javohir",
+      "Kamron", "Laziz", "Muhammad", "Nodir", "O'tkir",
+      "Po'lat", "Qodir", "Rustam", "Sarvar", "Temur",
+      "Ulug'bek", "Valisher", "Xurshid", "Yodgor", "Zafar",
+      "Asilbek", "Botir", "Dilmurod", "Erkin", "Firdavs",
+      "G'iyos", "Hakim", "Ibrohim", "Jahongir", "Komil",
+      "Lutfulla", "Murod", "Nurmuhammad", "Olim", "Polvon",
+      "Ravshan", "Sardor", "Tohir", "Umid", "Vohid",
+      "Xolmat", "Yorqin", "Zokir", "Anvar", "Bobur",
+    ];
+
+    const uzbekLastNames = [
+      "Karimov", "Rahimov", "Aliyev", "Yusupov", "Tursunov",
+      "Xasanov", "Xusanov", "Toirov", "Nazarov", "Ismoilov",
+      "Ochilov", "Saidov", "G'aniyev", "Hakimov", "Jabborov",
+      "Kamolov", "Latipov", "Mahmudov", "Norboyev", "Ortiqov",
+      "Primov", "Qodirov", "Raxmatov", "Sobirov", "Toshmatov",
+      "Umarov", "Fayzullayev", "Xaydarov", "Choriyev", "Shodiyev",
+      "Ergashev", "Yo'ldoshev", "Baxtiyorov", "Dushanov", "Eshonqulov",
+      "Jo'rayev", "Zoirov", "Ibragimov", "Komilov", "Mo'minov",
+      "Normatov", "Omonov", "Pardayev", "Ro'ziyev", "Sultonov",
+      "Toshpo'latov", "Usmonov", "Xolmirzayev", "Yodgorov", "Jo'rayev",
+    ];
+
     for (let i = 1; i <= 500; i++) {
       const pad = String(i).padStart(4, '0');
       const studentPhone = `+99899333${pad}`;
-      const studentName = `Talaba ${i}`;
+      const firstName = uzbekFirstNames[i % uzbekFirstNames.length];
+      const lastName = uzbekLastNames[Math.floor(i / uzbekFirstNames.length) % uzbekLastNames.length];
+      const studentName = `${firstName} ${lastName}`;
       const level = cefrLevels[i % cefrLevels.length];
 
       const student = await this.prisma.user.upsert({
@@ -437,6 +480,95 @@ export class UserSeeder {
       this.logger.log(`Seeded ${attemptsToCreate.length} test attempts and updated analytics tables!`);
     }
 
+    const assignmentCount = await this.prisma.groupAssignment.count();
+    if (assignmentCount < 10) {
+      await this.seedGroupAssignments();
+    }
+
     this.logger.log('Comprehensive seeding completed successfully!');
+  }
+
+  private async seedGroupAssignments(): Promise<void> {
+    this.logger.log('🌱 Seeding fallback group assignments...');
+    const groups = await this.prisma.group.findMany({ where: { isActive: true } });
+    const tests = await this.prisma.test.findMany({ where: { isActive: true } });
+
+    if (!groups.length) {
+      this.logger.warn('No active groups found to seed assignments.');
+      return;
+    }
+
+    let course = await this.prisma.course.findFirst();
+    if (!course) {
+      course = await this.prisma.course.create({
+        data: {
+          title: 'General English',
+          description: 'General English Course for CEFR',
+          level: 'A2',
+          isActive: true,
+        },
+      });
+    }
+
+    const taskCount = await this.prisma.task.count();
+    const taskTitles = [
+      "Writing: Introduce Yourself",
+      "Reading: Modern Technology",
+      "Grammar: Present Perfect vs Past Simple",
+      "Listening: Daily Conversations",
+      "Speaking: My Dream Job",
+      "Vocabulary: Advanced Adjectives",
+      "Essay: Climate Change Solutions",
+      "Letter: Asking for Information",
+      "Grammar: Conditional Sentences",
+      "Speaking: Audio Blog Post"
+    ];
+    const tasks: any[] = [];
+    if (taskCount < 10) {
+      for (const title of taskTitles) {
+        const task = await this.prisma.task.create({
+          data: {
+            title,
+            description: `Seeded homework task for ${title}. Complete and submit via attachments.`,
+            course: { connect: { id: course.id } },
+            maxScore: 100,
+            isActive: true,
+          }
+        });
+        tasks.push(task);
+      }
+    } else {
+      tasks.push(...(await this.prisma.task.findMany({ take: 10 })));
+    }
+
+    for (let i = 0; i < 15; i++) {
+      const group = groups[i % groups.length];
+      const task = tasks[i % tasks.length];
+      const test = tests.length > 0 ? tests[i % tests.length] : null;
+      
+      const isTask = i % 2 === 0;
+      
+      const members = await this.prisma.groupMember.findMany({
+        where: { groupId: group.id, status: 'ACTIVE', isActive: true },
+        take: 5
+      });
+      const randomMember = members.length > 0 ? members[Math.floor(Math.random() * members.length)] : null;
+      
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + (i % 7) + 1);
+
+      await this.prisma.groupAssignment.create({
+        data: {
+          groupId: group.id,
+          studentId: i % 3 === 0 && randomMember ? randomMember.studentId : null,
+          taskId: isTask && task ? task.id : null,
+          testId: !isTask && test ? test.id : null,
+          dueDate,
+          isRequired: i % 4 !== 0,
+          isActive: true,
+        }
+      });
+    }
+    this.logger.log('🌱 Finished seeding fallback group assignments.');
   }
 }
