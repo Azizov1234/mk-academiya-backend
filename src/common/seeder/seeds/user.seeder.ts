@@ -480,8 +480,8 @@ export class UserSeeder {
       this.logger.log(`Seeded ${attemptsToCreate.length} test attempts and updated analytics tables!`);
     }
 
-    const assignmentCount = await this.prisma.groupAssignment.count();
-    if (assignmentCount < 10) {
+    const currentAssignments = await this.prisma.groupAssignment.count();
+    if (currentAssignments < 10) {
       await this.seedGroupAssignments();
     }
 
